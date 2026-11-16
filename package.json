@@ -1,0 +1,23 @@
+{
+  "name": "stackchan-client",
+  "version": "0.1.0",
+  "description": "JavaScript (Node + browser) client for the M5Stack StackChan: Bluetooth LE control, plus the WebSocket server protocol",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "app": "node --env-file-if-exists=.env server.js",
+    "start": "node examples/ble-nod.js",
+    "demo": "node examples/demo.js",
+    "keyboard": "node examples/keyboard.js",
+    "start:server": "node examples/nod.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@abandonware/noble": "^1.9.2-26",
+    "@mediapipe/tasks-vision": "^1.2.3",
+    "ws": "^8.23.0"
+  }
+}

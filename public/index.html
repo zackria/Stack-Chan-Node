@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StackChan Control</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header>
+  <h1>StackChan Control</h1>
+  <div class="conn">
+    <span id="dot" class="dot" aria-hidden="true"></span>
+    <span id="status" role="status">Disconnected</span>
+    <button id="connect" class="primary">Connect</button>
+  </div>
+</header>
+<p id="hint" class="hint" hidden></p>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-tab="avatar">Avatar</button>
+  <button role="tab" aria-selected="false" data-tab="motion">Motion</button>
+  <button role="tab" aria-selected="false" data-tab="camera">Camera</button>
+  <button role="tab" aria-selected="false" data-tab="chat">Chat</button>
+</nav>
+
+<main>
+<!-- ───────────── AVATAR ───────────── -->
+<section id="tab-avatar" class="tab">
+  <div class="grid two">
+    <div class="card">
+      <h2>Mirror my face</h2>
+      <div class="video-wrap">
+        <video id="cam" autoplay playsinline muted></video>
+        <div id="cam-empty" class="empty">Camera off</div>
+      </div>
+      <div class="row">
+        <button id="mirror-toggle" class="primary">Start mirroring</button>
+        <button id="calibrate" disabled>Calibrate center</button>
+      </div>
+      <div class="opts">
+        <label><input type="checkbox" id="m-head" checked> Head</label>
+        <label><input type="checkbox" id="m-eyes" checked> Eyes</label>
+        <label><input type="checkbox" id="m-mouth" checked> Mouth</label>
+        <label><input type="checkbox" id="m-gaze" checked> Gaze</label>
+        <label><input type="checkbox" id="m-mirror" checked> Mirror (not copycat)</label>
+        <label><input type="checkbox" id="m-invyaw"> Invert yaw</label>
+        <label><input type="checkbox" id="m-invpitch"> Invert pitch</label>
+      </div>
+      <label class="slider"><span>Head gain</span><input type="range" id="m-gain" min="0.5" max="2.5" step="0.1" value="1.2"><output>1.2</output></label>
+      <label class="slider"><span>Smoothing</span><input type="range" id="m-smooth" min="0" max="0.95" step="0.05" value="0.5"><output>0.5</output></label>
+      <label class="slider"><span>Head speed</span><input type="range" id="m-speed" min="100" max="1000" step="50" value="400"><output>400</output></label>
+      <p id="track-status" class="muted">Mirroring uses your webcam. Video stays in your browser.</p>
+    </div>
+
+    <div class="card">
+      <h2>Robot face</h2>
+      <canvas id="face" width="480" height="320" aria-label="Preview of the robot face"></canvas>
+      <fieldset>
+        <legend>Logo &amp; brand image</legend>
+        <label>Image (PNG, JPEG or WebP, up to 5 MB)
+          <input id="brand-file" type="file" accept="image/png,image/jpeg,image/webp">
+        </label>
+        <div class="row">
+          <label>Placement <select id="brand-placement"><option value="background">Behind the face</option><option value="face">Replace the face</option></select></label>
+          <label>Fit <select id="brand-fit"><option value="contain">Fit whole image</option><option value="cover">Fill screen</option></select></label>
+        </div>
+        <label class="slider"><span>Opacity</span><input id="brand-opacity" type="range" min="0" max="100" value="100"><output>100</output></label>
+        <div class="row">
+          <button id="brand-remove" disabled>Remove image</button>
+          <button id="brand-download">Download PNG</button>
+          <button id="brand-share" hidden>Share image</button>
+        </div>
+        <p id="brand-status" class="muted" role="status"></p>
+        <p class="muted">Images stay in your browser. Applies to this preview and shared PNGs. The robot’s Bluetooth interface does not support screen images.</p>
+      </fieldset>
+      <div class="row" id="presets"></div>
+      <div class="row">
+        <button id="blink">Blink</button>
+        <button id="reset-face">Reset face</button>
+      </div>
+      <h2>LEDs</h2>
+      <div class="row">
+        <input type="color" id="led-color" value="#2b5cff" aria-label="LED color">
+        <button id="led-set">Set</button>
+        <button id="led-off">Off</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid three" id="sliders"></div>
+</section>
+
+<!-- ───────────── MOTION ───────────── -->
+<section id="tab-motion" class="tab" hidden>
+  <div class="grid two">
+    <div class="card">
+      <h2>Joystick</h2>
+      <div id="pad" class="pad" tabindex="0" aria-label="Head joystick: drag to move the head">
+        <div class="pad-cross"></div>
+        <div id="knob" class="knob"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="spring" checked> Return to center on release</label>
+      <div class="row">
+        <button id="center">Center</button>
+        <button id="nod">Nod</button>
+        <button id="shake">Shake</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Servos</h2>
+      <label class="slider"><span>Yaw</span><input type="range" id="yaw" min="-1280" max="1280" value="0"><output>0</output></label>
+      <label class="slider"><span>Pitch</span><input type="range" id="pitch" min="0" max="900" value="450"><output>450</output></label>
+      <label class="slider"><span>Speed</span><input type="range" id="speed" min="50" max="1000" value="300"><output>300</output></label>
+      <p class="muted">Angles are in 0.1° units, as in the official app. Pitch is safest between 50 and 850.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────── CAMERA ───────────── -->
+<section id="tab-camera" class="tab" hidden>
+  <div class="grid two">
+    <div class="card">
+      <h2>Your camera</h2>
+      <div class="video-wrap"><video id="cam2" autoplay playsinline muted></video><div id="cam2-empty" class="empty">Camera off</div></div>
+      <div class="row">
+        <select id="cam-select" aria-label="Camera"></select>
+        <button id="cam-start">Start camera</button>
+        <button id="cam-stop" disabled>Stop</button>
+      </div>
+      <label class="check"><input type="checkbox" id="cam-flip" checked> Flip preview horizontally</label>
+    </div>
+    <div class="card">
+      <h2>Robot camera</h2>
+      <div class="video-wrap"><div class="empty">Not available over Bluetooth</div></div>
+      <p class="muted">The robot streams its camera through the StackChan cloud/server channel, which needs an authorization token that is not stored on the device. Bluetooth has no camera characteristic, so this panel is a placeholder until that channel is connected.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────── CHAT ───────────── -->
+<section id="tab-chat" class="tab" hidden>
+  <div class="grid two chat-grid">
+    <div class="card chat-card">
+      <h2>Conversation</h2>
+      <div id="log" class="log" role="log" aria-live="polite"><p class="muted">Say hello. The AI answers out loud and moves the robot with its tools.</p></div>
+      <form id="chat-form" class="row chat-input">
+        <input id="chat-text" type="text" placeholder="Type a message…" autocomplete="off" aria-label="Message">
+        <button id="mic" type="button" aria-pressed="false" title="Speak (Chrome sends audio to Google for transcription)">🎤</button>
+        <button id="send" class="primary" type="submit">Send</button>
+      </form>
+      <p id="chat-status" class="muted"></p>
+      <p id="voice-link" class="muted" hidden></p>
+    </div>
+    <div class="card">
+      <h2>AI</h2>
+      <label class="field"><span>Provider</span><select id="provider"></select></label>
+      <label class="field"><span>Model</span><input id="model" type="text" spellcheck="false" aria-describedby="model-help"></label>
+      <p id="model-help" class="muted">Defaults are editable. Set keys in <code>.env</code> (see <code>.env.example</code>) and restart.</p>
+      <label class="check"><input type="checkbox" id="speak" checked> Speak replies aloud</label>
+      <label class="check"><input type="checkbox" id="handsfree"> Hands-free (listen again after each reply)</label>
+      <label class="field"><span>Personality</span><textarea id="system" rows="6"></textarea></label>
+      <div class="row"><button id="chat-clear" type="button">New conversation</button><button id="stop-speech" type="button">Stop talking</button></div>
+      <p class="muted">Only your typed or spoken text goes to the chosen provider. The webcam is never sent anywhere.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
