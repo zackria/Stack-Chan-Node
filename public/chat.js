@@ -6,8 +6,9 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 
 export function initChat({ wsSend, setAvatar }) {
   const log = $('#log'), form = $('#chat-form'), input = $('#chat-text'), status = $('#chat-status');
-  const providerSel = $('#provider'), modelIn = $('#model');
+  const providerSel = $('#provider'), modelIn = $('#model'), geminiPill = $('#gemini-pill');
   let providers = [], busy = false, speaking = false, recognizer = null, listening = false, flapTimer = null;
+  let demoWaiter = null;
 
   const add = (cls, text) => {
     log.querySelector('.muted')?.remove();
@@ -21,18 +22,21 @@ export function initChat({ wsSend, setAvatar }) {
 
   /* ───── speech output with simple lip-flap ───── */
   function stopFlap() { clearInterval(flapTimer); flapTimer = null; setAvatar({ mouth: { weight: 0 } }); }
-  function speak(text) {
+  function speak(text, { force = false } = {}) {
     return new Promise((resolve) => {
-      if (!$('#speak').checked || !('speechSynthesis' in window)) return resolve();
+      if ((!force && !$('#speak').checked) || !('speechSynthesis' in window)) return resolve();
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.onstart = () => { speaking = true; flapTimer = setInterval(() => setAvatar({ mouth: { weight: 15 + Math.round(Math.random() * 65) } }), 130); };
+      u.onstart = () => {
+        speaking = true;
+        flapTimer = setInterval(() => setAvatar({ mouth: { weight: 15 + Math.round(Math.random() * 65) } }), 120);
+      };
       const done = () => { speaking = false; stopFlap(); resolve(); };
       u.onend = done; u.onerror = done;
       speechSynthesis.speak(u);
     });
   }
-  $('#stop-speech').onclick = () => { speechSynthesis.cancel(); };
+  $('#stop-speech').onclick = () => { speechSynthesis.cancel(); stopFlap(); };
 
   /* ───── speech input ───── */
   const mic = $('#mic');
@@ -58,15 +62,20 @@ export function initChat({ wsSend, setAvatar }) {
     if (busy) return;
     speechSynthesis.cancel();
     add('user', text);
-    wsSend({ t: 'chat', text, provider: providerSel.value, model: modelIn.value.trim(), system: $('#system').value.trim() });
+    wsSend({ t: 'chat', text, provider: providerSel.value || 'gemini', model: modelIn.value.trim(), system: $('#system').value.trim() });
   }
   form.onsubmit = (e) => { e.preventDefault(); const t = input.value.trim(); if (t) { input.value = ''; send(t); } };
   $('#chat-clear').onclick = () => { wsSend({ t: 'chat_reset' }); log.innerHTML = '<p class="muted">New conversation.</p>'; speechSynthesis.cancel(); };
 
+  for (const chip of document.querySelectorAll('.prompt-chip')) {
+    chip.onclick = () => { if (chip.dataset.prompt) send(chip.dataset.prompt); };
+  }
+
   providerSel.onchange = () => {
     const p = providers.find((x) => x.id === providerSel.value);
     modelIn.value = p?.defaultModel ?? '';
-    if (p && !p.available) setStatus(`${p.label} has no API key on the server yet. Add it to .env and restart.`); else setStatus('');
+    if (p && !p.available) setStatus(`${p.label} has no API key in .env yet. Paste GEMINI_API_KEY in .env (auto-reloads on save).`);
+    else setStatus('');
     try { localStorage.setItem('sc.provider', providerSel.value); } catch { /* storage unavailable */ }
   };
 
@@ -75,21 +84,48 @@ export function initChat({ wsSend, setAvatar }) {
   }
 
   return {
+    speak,
+    isGeminiReady: () => Boolean(providers.find((p) => p.id === 'gemini')?.available),
+    askDemo(promptText, timeoutMs = 12000) {
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => { demoWaiter = null; resolve(null); }, timeoutMs);
+        demoWaiter = (res) => { clearTimeout(timer); demoWaiter = null; resolve(res); };
+        add('user', promptText);
+        wsSend({ t: 'chat', text: promptText, provider: 'gemini', model: modelIn.value.trim() || 'gemini-2.5-flash', system: $('#system').value.trim() });
+      });
+    },
     onMessage(m) {
       if (m.t === 'providers') {
         providers = m.list;
+        const gem = providers.find((p) => p.id === 'gemini');
+        if (geminiPill && gem) {
+          geminiPill.textContent = gem.available ? `Gemini (${gem.defaultModel}): Ready` : 'Gemini: Add key in .env';
+          geminiPill.className = `pill ${gem.available ? 'ok' : 'warn'}`;
+        }
+        const vbSel = $('#voice-brain-provider');
+        if (vbSel && m.askAiProvider) {
+          vbSel.value = m.askAiProvider;
+        }
         let saved = null; try { saved = localStorage.getItem('sc.provider'); } catch { /* ignore */ }
-        providerSel.innerHTML = providers.map((p) => `<option value="${p.id}">${p.label}${p.available ? '' : ' (no key)'}</option>`).join('');
-        providerSel.value = providers.find((p) => p.id === saved)?.id ?? providers.find((p) => p.available)?.id ?? providers[0].id;
+        providerSel.innerHTML = providers.map((p) => `<option value="${p.id}">${p.label}${p.available ? ' ✓' : ' (no key)'}</option>`).join('');
+        providerSel.value = providers.find((p) => p.id === saved && p.available)?.id
+          ?? (gem?.available ? 'gemini' : null)
+          ?? providers.find((p) => p.available)?.id
+          ?? 'gemini';
         if (!$('#system').value) $('#system').value = m.defaultSystem;
         providerSel.onchange();
       } else if (m.t === 'chat_busy') {
         busy = m.busy; $('#send').disabled = busy;
-        if (busy) setStatus('Thinking…'); else if (status.textContent === 'Thinking…') setStatus('');
+        if (busy) setStatus('Thinking with Google Gemini…'); else if (status.textContent.startsWith('Thinking')) setStatus('');
       } else if (m.t === 'chat_reply') {
         if (m.actions?.length) add('acts', `🤖 ${m.actions.map((a) => a.name.replace('_', ' ') + (a.args?.name ? `: ${a.args.name}` : '')).join(' · ')}`);
         add('bot', m.text);
-        speak(m.text).then(afterReply);
+        if (demoWaiter) {
+          const w = demoWaiter;
+          w({ ok: true, text: m.text, actions: m.actions });
+        } else {
+          speak(m.text).then(afterReply);
+        }
       } else if (m.t === 'voice_link') {
         const el = $('#voice-link');
         el.hidden = m.state === 'off';
@@ -98,6 +134,10 @@ export function initChat({ wsSend, setAvatar }) {
         add('acts', `🎙️ voice agent: ${m.name.replace('_', ' ')}${m.args?.name ? ': ' + m.args.name : ''} → ${m.result}`);
       } else if (m.t === 'chat_error') {
         add('err', m.message); setStatus('');
+        if (demoWaiter) {
+          const w = demoWaiter;
+          w({ ok: false, error: m.message });
+        }
       }
     },
   };

@@ -1,3 +1,5 @@
 node_modules/
 .env
 notes.txt
+firmware/build/
+.DS_Store

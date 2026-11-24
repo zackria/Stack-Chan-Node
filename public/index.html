@@ -3,13 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StackChan Control</title>
+<title>StackChan Custom Control &amp; Gemini AI</title>
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 <header>
-  <h1>StackChan Control</h1>
+  <div class="brand-header">
+    <img src="/cgi-logo.png" alt="CGI Logo" class="header-logo" style="object-fit:contain;background:#fff;padding:3px 6px;">
+    <div>
+      <h1>CGI StackChan Studio</h1>
+      <p class="subtitle">CGI.com Brand · Expression Simulator · Face Mirror · Google Gemini AI</p>
+    </div>
+  </div>
   <div class="conn">
+    <button id="device-voice-btn" class="accent-outline" type="button" title="Toggle voice conversation directly on Stack-Chan's built-in mic &amp; speaker">🎙️ Talk on Device</button>
+    <button id="header-demo-btn" class="accent-outline" type="button">▶ Run Capability Demo</button>
+    <span id="gemini-pill" class="pill" title="Configure GEMINI_API_KEY in .env">Gemini: checking…</span>
     <span id="dot" class="dot" aria-hidden="true"></span>
     <span id="status" role="status">Disconnected</span>
     <button id="connect" class="primary">Connect</button>
@@ -18,25 +27,79 @@
 <p id="hint" class="hint" hidden></p>
 
 <nav class="tabs" role="tablist">
-  <button role="tab" aria-selected="true" data-tab="avatar">Avatar</button>
-  <button role="tab" aria-selected="false" data-tab="motion">Motion</button>
+  <button role="tab" aria-selected="true" data-tab="avatar">Avatar, Expressions &amp; Demo</button>
+  <button role="tab" aria-selected="false" data-tab="motion">Motion &amp; Servos</button>
   <button role="tab" aria-selected="false" data-tab="camera">Camera</button>
-  <button role="tab" aria-selected="false" data-tab="chat">Chat</button>
+  <button role="tab" aria-selected="false" data-tab="chat">Gemini AI Chat</button>
 </nav>
 
 <main>
-<!-- ───────────── AVATAR ───────────── -->
+<!-- ───────────── AVATAR, EXPRESSIONS & DEMO ───────────── -->
 <section id="tab-avatar" class="tab">
   <div class="grid two">
+    <!-- Robot Face & Custom Logo Card -->
     <div class="card">
-      <h2>Mirror my face</h2>
+      <div class="card-head">
+        <h2>Robot face &amp; custom logo</h2>
+        <span id="active-expr-badge" class="badge">😐 Neutral</span>
+      </div>
+      <div id="face-frame" class="face-frame">
+        <canvas id="face" width="480" height="320" aria-label="Preview of the robot face"></canvas>
+      </div>
+      <div class="row" id="presets"></div>
+      <div class="row">
+        <button id="blink" type="button">Blink</button>
+        <button id="reset-face" type="button">Reset face</button>
+        <input type="color" id="led-color" value="#2b5cff" aria-label="LED color">
+        <button id="led-set" type="button">Set LEDs</button>
+        <button id="led-off" type="button">LEDs Off</button>
+      </div>
+
+      <fieldset class="subcard">
+        <legend>Custom logo &amp; brand overlay</legend>
+        <label class="file-label">Upload custom logo (PNG, JPEG, WebP or SVG, up to 5 MB)
+          <input id="brand-file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+        </label>
+        <div class="row">
+          <label>Placement
+            <select id="brand-placement">
+              <option value="background">Behind the face (HUD / Frame)</option>
+              <option value="badge">Corner brand badge</option>
+              <option value="face">Replace the face (Full logo)</option>
+            </select>
+          </label>
+          <label>Fit
+            <select id="brand-fit">
+              <option value="cover">Fill screen</option>
+              <option value="contain">Fit whole image</option>
+            </select>
+          </label>
+        </div>
+        <label class="slider"><span>Opacity</span><input id="brand-opacity" type="range" min="0" max="100" value="85"><output>85</output></label>
+        <div class="row">
+          <button id="brand-default" type="button">Use default logo</button>
+          <button id="brand-remove" type="button">Remove logo</button>
+          <button id="brand-download" type="button">Download PNG</button>
+          <button id="brand-share" type="button" hidden>Share image</button>
+        </div>
+        <p id="brand-status" class="muted" role="status">Default custom logo loaded.</p>
+      </fieldset>
+    </div>
+
+    <!-- Mirror My Face Card -->
+    <div class="card">
+      <div class="card-head">
+        <h2>Mirror my face</h2>
+        <span id="mirror-badge" class="badge muted-badge">Idle</span>
+      </div>
       <div class="video-wrap">
         <video id="cam" autoplay playsinline muted></video>
-        <div id="cam-empty" class="empty">Camera off</div>
+        <div id="cam-empty" class="empty">Camera off — click "Start mirroring" to track your face, eyes, gaze &amp; mouth</div>
       </div>
       <div class="row">
-        <button id="mirror-toggle" class="primary">Start mirroring</button>
-        <button id="calibrate" disabled>Calibrate center</button>
+        <button id="mirror-toggle" class="primary" type="button">Start mirroring</button>
+        <button id="calibrate" type="button" disabled>Calibrate center</button>
+        <button id="mirror-sim-btn" type="button" title="Simulate face mirroring without a webcam">Simulate mirror test</button>
       </div>
       <div class="opts">
         <label><input type="checkbox" id="m-head" checked> Head</label>
@@ -50,41 +113,123 @@
       <label class="slider"><span>Head gain</span><input type="range" id="m-gain" min="0.5" max="2.5" step="0.1" value="1.2"><output>1.2</output></label>
       <label class="slider"><span>Smoothing</span><input type="range" id="m-smooth" min="0" max="0.95" step="0.05" value="0.5"><output>0.5</output></label>
       <label class="slider"><span>Head speed</span><input type="range" id="m-speed" min="100" max="1000" step="50" value="400"><output>400</output></label>
-      <p id="track-status" class="muted">Mirroring uses your webcam. Video stays in your browser.</p>
+      <p id="track-status" class="muted">Mirroring uses your webcam via MediaPipe FaceLandmarker. Video stays in your browser.</p>
+    </div>
+  </div>
+
+  <!-- ───────────── EXPRESSION MODE & CAPABILITY DEMO ROW ───────────── -->
+  <div class="grid two">
+    <!-- Expression Mode Card -->
+    <div class="card highlight-card">
+      <div class="card-head">
+        <h2>Expression Mode (Emotion Simulator)</h2>
+        <span id="expr-sim-badge" class="badge muted-badge">Stopped</span>
+      </div>
+      <p class="muted">Simulates lifelike robot emotions with smooth eye/mouth morphing, autonomous blinking, head posture, and mood LED lighting.</p>
+      <div class="row">
+        <button id="expr-sim-toggle" class="primary" type="button">▶ Start Expression Mode</button>
+        <label>Mode
+          <select id="expr-sim-mode">
+            <option value="carousel">Emotion Carousel (Auto-cycle all expressions)</option>
+            <option value="ambient">Ambient Companion (Breathing, blinks &amp; glances)</option>
+            <option value="story">Story Sequences (Multi-step emotional arcs)</option>
+          </select>
+        </label>
+      </div>
+      <div class="opts">
+        <label><input type="checkbox" id="expr-sync-head" checked> Sync head posture</label>
+        <label><input type="checkbox" id="expr-sync-led" checked> Sync mood LEDs</label>
+        <label><input type="checkbox" id="expr-auto-blink" checked> Autonomous blinking</label>
+      </div>
+      <label class="slider"><span>Cycle speed</span><input type="range" id="expr-interval" min="1.5" max="8" step="0.5" value="3.0"><output>3.0s</output></label>
+      <div class="subcard">
+        <span class="subcard-title">Instant Animated Emotion Sequences</span>
+        <div class="row" id="sequence-buttons"></div>
+      </div>
+      <p id="expr-sim-status" class="muted" role="status">Ready to simulate expressions.</p>
     </div>
 
-    <div class="card">
-      <h2>Robot face</h2>
-      <canvas id="face" width="480" height="320" aria-label="Preview of the robot face"></canvas>
-      <fieldset>
-        <legend>Logo &amp; brand image</legend>
-        <label>Image (PNG, JPEG or WebP, up to 5 MB)
-          <input id="brand-file" type="file" accept="image/png,image/jpeg,image/webp">
-        </label>
-        <div class="row">
-          <label>Placement <select id="brand-placement"><option value="background">Behind the face</option><option value="face">Replace the face</option></select></label>
-          <label>Fit <select id="brand-fit"><option value="contain">Fit whole image</option><option value="cover">Fill screen</option></select></label>
-        </div>
-        <label class="slider"><span>Opacity</span><input id="brand-opacity" type="range" min="0" max="100" value="100"><output>100</output></label>
-        <div class="row">
-          <button id="brand-remove" disabled>Remove image</button>
-          <button id="brand-download">Download PNG</button>
-          <button id="brand-share" hidden>Share image</button>
-        </div>
-        <p id="brand-status" class="muted" role="status"></p>
-        <p class="muted">Images stay in your browser. Applies to this preview and shared PNGs. The robot’s Bluetooth interface does not support screen images.</p>
-      </fieldset>
-      <div class="row" id="presets"></div>
-      <div class="row">
-        <button id="blink">Blink</button>
-        <button id="reset-face">Reset face</button>
+    <!-- Capability Showcase Demo Card (ON-DEVICE NATIVE DEMO) -->
+    <div class="card highlight-card">
+      <div class="card-head">
+        <h2>On-Device Capability Showcase Demo</h2>
+        <span id="demo-badge" class="badge muted-badge">Ready on Device</span>
       </div>
-      <h2>LEDs</h2>
+      <p class="muted">Runs the native <strong>7-Stage C++ Capability Showcase directly on Stack-Chan's hardware</strong> (320×240 LCD, Dual Servos, 12× RGB LEDs, Built-in Speaker Chimes, 6-Axis IMU, Head Touch &amp; 32GB MicroSD). You can also launch it unplugging from the PC by <strong>tapping the red CGI logo on Stack-Chan's screen</strong> or <strong>holding the top head touch sensor for 1.5s</strong>!</p>
       <div class="row">
-        <input type="color" id="led-color" value="#2b5cff" aria-label="LED color">
-        <button id="led-set">Set</button>
-        <button id="led-off">Off</button>
+        <button id="demo-run-btn" class="primary" type="button">▶ Run On-Device Capability Demo</button>
+        <button id="demo-stop-btn" type="button" disabled>⏹ Stop Device Demo</button>
+        <button id="browser-demo-btn" type="button" title="Also mirror/preview in browser UI">🖥️ Run with Browser Preview</button>
+        <label class="check"><input type="checkbox" id="demo-narration" checked> Voice narration &amp; lip-flap</label>
       </div>
+      <div class="progress-bar" aria-hidden="true"><div id="demo-progress" class="progress-fill"></div></div>
+      <ol id="demo-stages" class="stage-list">
+        <li data-stage="1"><strong>1. CGI.com Brand Identity</strong> — On-screen CGI logo, red RGB glow, welcome chime &amp; bow</li>
+        <li data-stage="2"><strong>2. On-Device Expression Tour</strong> — Native Happy, Love/Heart, Blush, Angry &amp; Curious emotions</li>
+        <li data-stage="3"><strong>3. Dual-Servo Choreography</strong> — Synchronized 360° Yaw/Pitch dance with eye tracking</li>
+        <li data-stage="4"><strong>4. Live 6-Axis IMU &amp; Head Touch</strong> — Real-time BMI270 gyroscope tilt &amp; Si12T touch pad showcase</li>
+        <li data-stage="5"><strong>5. Real-Time Face Mirror Mode</strong> — High-speed 45Hz sinusoidal gaze, wink, jaw &amp; head tracking</li>
+        <li data-stage="6"><strong>6. 32GB MicroSD FAT32 Benchmark</strong> — Live read/write verification on <code>/sdcard/memory</code></li>
+        <li data-stage="7"><strong>7. Multi-LLM AI Brain Ready</strong> — Gemini 2.5 Flash · Claude · GPT-5 finale &amp; celebration</li>
+      </ol>
+      <p id="demo-status" class="muted" role="status">Tap the red CGI logo on Stack-Chan's screen, hold the top of its head for 1.5s, or click "Run On-Device Capability Demo" above.</p>
+    </div>
+  </div>
+
+  <!-- ───────────── ON-DEVICE SENSORS: TOP HEAD TOUCH & 6-AXIS GYROSCOPE ───────────── -->
+  <div class="grid two">
+    <div class="card highlight-card">
+      <div class="card-head">
+        <h2>Top Head Capacitive Touch Sensor (Si12T)</h2>
+        <span id="touch-gesture-badge" class="badge muted-badge">Idle</span>
+      </div>
+      <p class="muted">Touch or stroke the top of Stack-Chan's head for happy heart reactions &amp; pink LEDs, or <strong>double-tap the top of the head</strong> to start/stop on-device voice conversation!</p>
+      <div class="touch-zones">
+        <div class="touch-zone"><span>Front Pad</span><div class="progress-bar"><div id="tz-0" class="progress-fill"></div></div></div>
+        <div class="touch-zone"><span>Center Pad</span><div class="progress-bar"><div id="tz-1" class="progress-fill"></div></div></div>
+        <div class="touch-zone"><span>Back Pad</span><div class="progress-bar"><div id="tz-2" class="progress-fill"></div></div></div>
+      </div>
+      <p id="touch-status" class="muted">Position: 0 · Waiting for touch on top of Stack-Chan's head…</p>
+    </div>
+
+    <div class="card highlight-card">
+      <div class="card-head">
+        <h2>6-Axis IMU Gyroscope &amp; Accelerometer (BMI270)</h2>
+        <span id="imu-event-badge" class="badge muted-badge">Stable</span>
+      </div>
+      <p class="muted">Tilt or pick up Stack-Chan for a surprised gyroscope look-up reaction, or give it a gentle shake for dizzy spiral eyes!</p>
+      <div class="sensor-grid">
+        <div class="sensor-box"><span>Pitch Tilt</span><strong id="imu-pitch">0.0°</strong></div>
+        <div class="sensor-box"><span>Roll Tilt</span><strong id="imu-roll">0.0°</strong></div>
+        <div class="sensor-box"><span>Gyro (X/Y/Z)</span><strong id="imu-gyro">0 / 0 / 0 °/s</strong></div>
+        <div class="sensor-box"><span>Accel (X/Y/Z)</span><strong id="imu-accel">0 / 0 / 9.8 m/s²</strong></div>
+      </div>
+      <label class="check"><input type="checkbox" id="imu-mirror-head"> Mirror device gyroscope tilt to UI face preview</label>
+    </div>
+  </div>
+
+  <!-- ───────────── MICROSD MEMORY CARD & PSRAM STORAGE MANAGER ───────────── -->
+  <div class="grid two">
+    <div class="card highlight-card">
+      <div class="card-head">
+        <h2>MicroSD Memory Card &amp; PSRAM Storage (/sdcard FAT32)</h2>
+        <span id="sd-status-badge" class="badge muted-badge">Checking SD Card…</span>
+      </div>
+      <p class="muted">Formats and mounts your MicroSD card on Stack-Chan (<code>/sdcard</code>) to store CGI brand assets (<code>/sdcard/cgi/</code>) and persistent AI conversation memory (<code>/sdcard/memory/</code>) while freeing internal SRAM &amp; 8 MB PSRAM.</p>
+      <div class="sensor-grid">
+        <div class="sensor-box"><span>SD Card Name</span><strong id="sd-name">—</strong></div>
+        <div class="sensor-box"><span>SD Capacity</span><strong id="sd-capacity">— MB</strong></div>
+        <div class="sensor-box"><span>SD Free / Used</span><strong id="sd-space">— MB free</strong></div>
+        <div class="sensor-box"><span>Stored Files</span><strong id="sd-files">0 files</strong></div>
+        <div class="sensor-box"><span>8 MB PSRAM Free</span><strong id="sd-psram">— KB / 8192 KB</strong></div>
+        <div class="sensor-box"><span>Internal SRAM Free</span><strong id="sd-sram">— KB</strong></div>
+      </div>
+      <div class="row">
+        <button id="sd-format-btn" class="primary" type="button">Format &amp; Initialize SD Card (FAT32)</button>
+        <button id="sd-sync-btn" type="button">Sync CGI Brand &amp; Expressions to SD</button>
+        <button id="sd-refresh-btn" type="button">Refresh Storage</button>
+      </div>
+      <p id="sd-status-text" class="muted" role="status">Waiting for Stack-Chan MicroSD telemetry…</p>
     </div>
   </div>
 
@@ -102,9 +247,9 @@
       </div>
       <label class="check"><input type="checkbox" id="spring" checked> Return to center on release</label>
       <div class="row">
-        <button id="center">Center</button>
-        <button id="nod">Nod</button>
-        <button id="shake">Shake</button>
+        <button id="center" type="button">Center</button>
+        <button id="nod" type="button">Nod</button>
+        <button id="shake" type="button">Shake</button>
       </div>
     </div>
     <div class="card">
@@ -125,8 +270,8 @@
       <div class="video-wrap"><video id="cam2" autoplay playsinline muted></video><div id="cam2-empty" class="empty">Camera off</div></div>
       <div class="row">
         <select id="cam-select" aria-label="Camera"></select>
-        <button id="cam-start">Start camera</button>
-        <button id="cam-stop" disabled>Stop</button>
+        <button id="cam-start" type="button">Start camera</button>
+        <button id="cam-stop" type="button" disabled>Stop</button>
       </div>
       <label class="check"><input type="checkbox" id="cam-flip" checked> Flip preview horizontally</label>
     </div>
@@ -142,10 +287,15 @@
 <section id="tab-chat" class="tab" hidden>
   <div class="grid two chat-grid">
     <div class="card chat-card">
-      <h2>Conversation</h2>
-      <div id="log" class="log" role="log" aria-live="polite"><p class="muted">Say hello. The AI answers out loud and moves the robot with its tools.</p></div>
+      <h2>Google Gemini Conversation</h2>
+      <div id="log" class="log" role="log" aria-live="polite"><p class="muted">Say hello! Google Gemini answers out loud and animates StackChan's expressions, head servos, and LEDs.</p></div>
+      <div class="row quick-prompts">
+        <button type="button" class="prompt-chip" data-prompt="Introduce yourself, show an excited face, and nod hello!">👋 Introduce &amp; nod</button>
+        <button type="button" class="prompt-chip" data-prompt="Show me your thinking face and tell me a fun fact about robots.">🤔 Thinking fact</button>
+        <button type="button" class="prompt-chip" data-prompt="Tell me a short one-liner joke and laugh with yellow LEDs!">😆 Tell a joke</button>
+      </div>
       <form id="chat-form" class="row chat-input">
-        <input id="chat-text" type="text" placeholder="Type a message…" autocomplete="off" aria-label="Message">
+        <input id="chat-text" type="text" placeholder="Ask Google Gemini anything…" autocomplete="off" aria-label="Message">
         <button id="mic" type="button" aria-pressed="false" title="Speak (Chrome sends audio to Google for transcription)">🎤</button>
         <button id="send" class="primary" type="submit">Send</button>
       </form>
@@ -153,11 +303,19 @@
       <p id="voice-link" class="muted" hidden></p>
     </div>
     <div class="card">
-      <h2>AI</h2>
-      <label class="field"><span>Provider</span><select id="provider"></select></label>
+      <h2>AI Configuration (Web &amp; On-Device Voice Brain)</h2>
+      <label class="field"><span>On-Device Voice Brain (MCP <code>ask_ai</code>)</span>
+        <select id="voice-brain-provider">
+          <option value="gemini">Google Gemini 2.5 Flash (Recommended)</option>
+          <option value="anthropic">Anthropic Claude Sonnet</option>
+          <option value="openai">OpenAI ChatGPT (GPT-5)</option>
+        </select>
+      </label>
+      <p class="muted">When you talk to Stack-Chan, its built-in voice pipeline uses the MCP bridge (<code>ask_ai</code>) to query your selected model (<strong>Gemini</strong>, <strong>Claude</strong>, or <strong>GPT</strong>) instead of the default cloud Qwen model. For 100% direct Gemini/Claude/GPT without any Qwen router, visit <a href="https://xiaozhi.me" target="_blank" rel="noopener">xiaozhi.me</a> console for device <code>DC:B4:D9:77:1A:58</code> or say <em>"Ask Gemini…"</em> / <em>"Use ask_ai…"</em>.</p>
+      <label class="field"><span>Web Chat Provider</span><select id="provider"></select></label>
       <label class="field"><span>Model</span><input id="model" type="text" spellcheck="false" aria-describedby="model-help"></label>
-      <p id="model-help" class="muted">Defaults are editable. Set keys in <code>.env</code> (see <code>.env.example</code>) and restart.</p>
-      <label class="check"><input type="checkbox" id="speak" checked> Speak replies aloud</label>
+      <p id="model-help" class="muted">Set <code>GEMINI_API_KEY</code> in <code>.env</code> — the server hot-reloads <code>.env</code> automatically as soon as you save!</p>
+      <label class="check"><input type="checkbox" id="speak" checked> Speak replies aloud (with robot lip-flap)</label>
       <label class="check"><input type="checkbox" id="handsfree"> Hands-free (listen again after each reply)</label>
       <label class="field"><span>Personality</span><textarea id="system" rows="6"></textarea></label>
       <div class="row"><button id="chat-clear" type="button">New conversation</button><button id="stop-speech" type="button">Stop talking</button></div>

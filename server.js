@@ -13,13 +13,39 @@ import { startXiaozhiBridge } from './lib/xiaozhi-mcp.js';
 import { createAskTool } from './lib/ask-ai.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const ENV_PATH = path.join(ROOT, '.env');
+
+/** Parse and hot-reload .env so adding GEMINI_API_KEY takes effect without restarting the server. */
+function reloadDotEnv() {
+  if (!fs.existsSync(ENV_PATH)) return;
+  try {
+    const content = fs.readFileSync(ENV_PATH, 'utf8');
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) continue;
+      const eq = line.indexOf('=');
+      if (eq === -1) continue;
+      const key = line.slice(0, eq).trim();
+      let val = line.slice(eq + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      if (key) {
+        if (val) process.env[key] = val;
+        else delete process.env[key];
+      }
+    }
+  } catch { /* ignore transient read errors */ }
+}
+reloadDotEnv();
+
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '127.0.0.1'; // never expose the robot to the network
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.wasm': 'application/wasm', '.task': 'application/octet-stream',
-  '.svg': 'image/svg+xml', '.json': 'application/json',
+  '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png',
 };
 const MOUNTS = [
   ['/shared/', path.join(ROOT, 'src')],
@@ -60,6 +86,14 @@ const ble = new BleManager(broadcast);
 const robot = createRobotActions(ble, broadcast);
 const MAX_HISTORY = 24; // messages kept per conversation
 
+// Watch .env for changes and push updated provider availability to all connected clients.
+try {
+  fs.watchFile(ENV_PATH, { interval: 1000 }, () => {
+    reloadDotEnv();
+    broadcast({ t: 'providers', list: listProviders(), defaultSystem: DEFAULT_SYSTEM });
+  });
+} catch { /* ignore if watchFile unsupported */ }
+
 // Optional: let the robot's built-in voice agent (xiaozhi) call our robot tools. URL carries a secret token: env only.
 let bridgeState = 'off';
 const bridgeStatus = () => ({ t: 'voice_link', state: bridgeState });
@@ -80,23 +114,28 @@ if (process.env.XIAOZHI_MCP_URL) {
 }
 
 wss.on('connection', (ws) => {
+  reloadDotEnv();
   const chat = { history: [], busy: false };
   const reply = (msg) => ws.readyState === 1 && ws.send(JSON.stringify(msg));
   reply(ble.status());
+  if (ble.lastSdCard) reply({ t: 'sdcard', data: ble.lastSdCard });
+  if (ble.lastDemo) reply({ t: 'device_demo', data: ble.lastDemo });
   reply(bridgeStatus());
-  reply({ t: 'providers', list: listProviders(), defaultSystem: DEFAULT_SYSTEM });
+  reply({ t: 'providers', list: listProviders(), defaultSystem: DEFAULT_SYSTEM, askAiProvider: process.env.ASK_AI_PROVIDER || 'gemini' });
 
   async function handleChat(m) {
     if (chat.busy) return reply({ t: 'chat_error', message: 'Still thinking about the last message…' });
     const text = String(m.text ?? '').trim().slice(0, 2000);
     if (!text) return;
+    reloadDotEnv();
     chat.busy = true; reply({ t: 'chat_busy', busy: true });
     try {
-      const adapter = createAdapter(String(m.provider), { model: m.model ? String(m.model).slice(0, 100) : undefined });
+      const adapter = createAdapter(String(m.provider || 'gemini'), { model: m.model ? String(m.model).slice(0, 100) : undefined });
       const system = m.system ? String(m.system).slice(0, 4000) : DEFAULT_SYSTEM;
       const { text: answer, actions } = await runTurn({ adapter, robot, history: chat.history, userText: text, system });
       chat.history.push({ role: 'user', text }, { role: 'assistant', text: answer });
       chat.history = chat.history.slice(-MAX_HISTORY);
+      ble.saveSdNote(`[Gemini Chat] User: ${text} | StackChan: ${answer}`).catch(() => {});
       reply({ t: 'chat_reply', text: answer, actions });
     } catch (e) {
       reply({ t: 'chat_error', message: e.message });
@@ -110,7 +149,33 @@ wss.on('connection', (ws) => {
     switch (m.t) {
       case 'connect': await ble.connect(); break;
       case 'disconnect': await ble.disconnect(); break;
+      case 'device_voice_toggle': await ble.toggleDeviceVoice(); break;
+      case 'device_demo_start': await ble.startDeviceDemo(); break;
+      case 'device_demo_stop': await ble.stopDeviceDemo(); break;
+      case 'device_demo_toggle': await ble.toggleDeviceDemo(); break;
+      case 'set_voice_provider': {
+        const p = String(m.provider || '').trim();
+        if (['gemini', 'anthropic', 'openai'].includes(p)) {
+          process.env.ASK_AI_PROVIDER = p;
+          try {
+            if (fs.existsSync(ENV_PATH)) {
+              const raw = fs.readFileSync(ENV_PATH, 'utf8');
+              const updated = /^ASK_AI_PROVIDER=/m.test(raw)
+                ? raw.replace(/^ASK_AI_PROVIDER=.*$/m, `ASK_AI_PROVIDER=${p}`)
+                : `${raw.trimEnd()}\nASK_AI_PROVIDER=${p}\n`;
+              fs.writeFileSync(ENV_PATH, updated, 'utf8');
+            }
+          } catch { /* ignore */ }
+          broadcast({ t: 'providers', list: listProviders(), defaultSystem: DEFAULT_SYSTEM, askAiProvider: p });
+        }
+        break;
+      }
+      case 'sd_format': await ble.formatSdCard(); break;
+      case 'sd_info': await ble.refreshSdCard(); break;
+      case 'sd_note': await ble.saveSdNote(m.text); break;
+      case 'sd_brand': await ble.syncSdBrandConfig(m.data); break;
       case 'motion': case 'avatar': case 'rgb': ble.send(m.t, m.data); break;
+      case 'sequence': await robot.runSequence(String(m.name || '')); break;
       case 'chat': await handleChat(m); break;
       case 'chat_reset': chat.history = []; break;
       default: break;
@@ -118,7 +183,10 @@ wss.on('connection', (ws) => {
   });
 });
 
-server.listen(PORT, HOST, () => console.log(`StackChan panel: http://${HOST}:${PORT}`));
+server.listen(PORT, HOST, () => {
+  console.log(`StackChan panel: http://${HOST}:${PORT}`);
+  ble.connect().catch(() => {});
+});
 
 const shutdown = async () => { await ble.disconnect(); process.exit(0); };
 process.on('SIGINT', shutdown);
